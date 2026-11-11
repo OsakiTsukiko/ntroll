@@ -1,0 +1,34 @@
+<resources>
+    <style name="AccentMint">
+        <item name="android:colorAccent">#72F5BD</item>
+        <item name="android:colorControlActivated">#72F5BD</item>
+    </style>
+    <style name="AccentCyan">
+        <item name="android:colorAccent">#65DFF5</item>
+        <item name="android:colorControlActivated">#65DFF5</item>
+    </style>
+    <style name="AccentBlue">
+        <item name="android:colorAccent">#92BAFF</item>
+        <item name="android:colorControlActivated">#92BAFF</item>
+    </style>
+    <style name="AccentLavender">
+        <item name="android:colorAccent">#C4A1FF</item>
+        <item name="android:colorControlActivated">#C4A1FF</item>
+    </style>
+    <style name="AccentRose">
+        <item name="android:colorAccent">#FF98BD</item>
+        <item name="android:colorControlActivated">#FF98BD</item>
+    </style>
+    <style name="AccentOrange">
+        <item name="android:colorAccent">#FFB185</item>
+        <item name="android:colorControlActivated">#FFB185</item>
+    </style>
+    <style name="AccentAmber">
+        <item name="android:colorAccent">#FFD779</item>
+        <item name="android:colorControlActivated">#FFD779</item>
+    </style>
+    <style name="AccentLime">
+        <item name="android:colorAccent">#C0EA82</item>
+        <item name="android:colorControlActivated">#C0EA82</item>
+    </style>
+</resources>
