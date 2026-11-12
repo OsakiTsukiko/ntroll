@@ -39,7 +39,7 @@ public final class MainActivity extends Activity {
     private AppAdapter adapter;
     private TextView status, count, empty;
     private int BG = 0xff0b1018, SURFACE = 0xff141e2b, BORDER = 0xff263649, ACCENT = 0xff72f5bd;
-    private LinearLayout screen, profileInfo;
+    private LinearLayout screen, profileInfo, profileSection;
     private ProfileCard profileCard;
     private TextView profileTitle, profilePosition, artwork;
     private Button previousProfile, nextProfile;
@@ -68,7 +68,7 @@ public final class MainActivity extends Activity {
 
     private void updateStatus() {
         boolean requested = getSharedPreferences("service", MODE_PRIVATE).getBoolean("enabled", false);
-        power.setText(requested ? "■  Stop firewall" : "▶  Start firewall");
+        power.setText(requested ? "■  Stop" : "▶  Start");
         status.setText(FirewallService.status);
         status.setTextColor(FirewallService.active ? ACCENT : MUTED);
     }
@@ -100,9 +100,11 @@ public final class MainActivity extends Activity {
         root.addView(heading);
         TextView subtitle = text("Per-app Wi-Fi & mobile data controls", 12, MUTED);
         subtitle.setPadding(0, dp(6), 0, dp(16)); root.addView(subtitle);
-        LinearLayout console = new LinearLayout(this); console.setOrientation(LinearLayout.VERTICAL);
-        console.setPadding(dp(16), dp(12), dp(16), dp(14)); bindSurface(console, 18);
-        TextView consoleTitle = text("●  LOCAL FIREWALL", 11, ACCENT); consoleTitle.setTypeface(Typeface.MONOSPACE); console.addView(consoleTitle);
+        LinearLayout console = new LinearLayout(this); console.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout firewallInfo = new LinearLayout(this); firewallInfo.setOrientation(LinearLayout.VERTICAL);
+        console.addView(firewallInfo,new LinearLayout.LayoutParams(0,-2,1));
+        console.setPadding(dp(16), dp(12), dp(16), dp(12)); bindSurface(console, 20);
+        TextView consoleTitle = text("●  LOCAL FIREWALL", 11, ACCENT); consoleTitle.setTypeface(Typeface.MONOSPACE); firewallInfo.addView(consoleTitle);
         root.addView(console);
         profileCard = new ProfileCard(); profileCard.setGravity(Gravity.CENTER_VERTICAL);
         profileCard.setPadding(dp(10),dp(10),dp(4),dp(10)); bindSurface(profileCard, 12);
@@ -113,7 +115,7 @@ public final class MainActivity extends Activity {
         profileInfo = new LinearLayout(this); profileInfo.setOrientation(LinearLayout.VERTICAL); profileInfo.setGravity(Gravity.CENTER_VERTICAL);
         profileInfo.setPadding(dp(12),0,dp(4),0); profileInfo.setMinimumHeight(dp(52)); profileInfo.setClickable(true); profileInfo.setFocusable(true);
         profilePosition = text("", 9, MUTED); profilePosition.setTypeface(Typeface.MONOSPACE);
-        profileTitle = text("", 17, WHITE); profileTitle.setTypeface(null,Typeface.BOLD); profileTitle.setMaxLines(1); profileTitle.setEllipsize(TextUtils.TruncateAt.END);
+        profileTitle = text("", 21, WHITE); profileTitle.setTypeface(null,Typeface.BOLD); profileTitle.setMaxLines(1); profileTitle.setEllipsize(TextUtils.TruncateAt.END);
         profileInfo.addView(profilePosition); profileInfo.addView(profileTitle); profileInfo.setOnClickListener(v -> showProfiles());
         profileCard.addView(profileInfo, new LinearLayout.LayoutParams(0,-2,1));
         previousProfile = playerButton(false); nextProfile = playerButton(true);
@@ -121,11 +123,20 @@ public final class MainActivity extends Activity {
         profileCard.addView(previousProfile,previousParams);
         profileCard.addView(nextProfile,new LinearLayout.LayoutParams(dp(48),dp(48)));
         LinearLayout.LayoutParams profileParams = new LinearLayout.LayoutParams(-1,-2); profileParams.topMargin = dp(10);
-        console.addView(profileCard,profileParams); refreshProfile();
-        status = text("Firewall is off", 14, MUTED); status.setPadding(0, dp(10), 0, dp(6)); console.addView(status);
+        profileSection = new LinearLayout(this); profileSection.setOrientation(LinearLayout.VERTICAL);
+        profileSection.setPadding(dp(12),dp(4),dp(12),dp(12)); bindSurface(profileSection,24);
+        root.addView(profileSection,profileParams);
+        profileSection.addView(profileCard); themedSurfaces.remove(profileCard); profileCard.setBackgroundColor(Color.TRANSPARENT);
+        LinearLayout profileActions = new LinearLayout(this);
+        action(profileActions,"+ Add",false,() -> nameProfile(null,false));
+        action(profileActions,"Edit",false,() -> nameProfile(currentProfile,false));
+        action(profileActions,"Change",false,this::showProfiles);
+        profileSection.addView(profileActions); refreshProfile();
+        status = text("Firewall is off", 12, MUTED); status.setPadding(0, dp(6), dp(10), 0); firewallInfo.addView(status);
         power = new Button(this); power.setText("Start firewall");
         styleButton(power, true);
-        console.addView(power, new LinearLayout.LayoutParams(-1, dp(48)));
+        console.addView(power, new LinearLayout.LayoutParams(dp(100), dp(48)));
+        power.setContentDescription("Start or stop firewall");
         power.setOnClickListener(v -> {
             if (getSharedPreferences("service", MODE_PRIVATE).getBoolean("enabled", false)) {
                 getSharedPreferences("service", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
@@ -321,55 +332,53 @@ public final class MainActivity extends Activity {
             .setMessage("Apply to " + affected + " visible apps with internet permission? Linked apps sharing their UID are affected too. Advanced rules (including Lockdown and roaming) remain in effect.")
             .setNegativeButton("Cancel", null).setPositiveButton("Apply", (d, which) -> change(uids, mask, block)).show();
     }
+    private void choices(String title, String[] labels, Runnable[] actions) {
+        LinearLayout body=sheetBody(); Dialog[] dialog=new Dialog[1];
+        for(int i=0;i<labels.length;i++) {
+            final int index=i; LinearLayout row=new LinearLayout(this); body.addView(row);
+            Button button=action(row,labels[i],false,() -> { dialog[0].dismiss(); actions[index].run(); });
+            button.setGravity(Gravity.START|Gravity.CENTER_VERTICAL); button.setPadding(dp(16),0,dp(16),0);
+        }
+        dialog[0]=sheet(title,body);
+    }
     private void showMenu(View anchor) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        menu.getMenu().add(0, 8, 0, "Manage profiles…");
-        menu.getMenu().add(0, 1, 1, "Bulk rules for shown apps");
-        menu.getMenu().add(0, 2, 1, "Blocked apps first").setCheckable(true).setChecked(blockedFirst);
-        menu.getMenu().add(0, 3, 2, "Refresh installed apps");
-        menu.getMenu().add(0, 5, 3, "Export current profile rules…");
-        menu.getMenu().add(0, 6, 4, "Import into current profile…");
-        menu.getMenu().add(0, 7, 5, "Reduce motion").setCheckable(true).setChecked(getPreferences(MODE_PRIVATE).getBoolean("reduce_motion", false));
-        menu.getMenu().add(0, 4, 6, "Battery & help");
-        menu.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 8) manageProfiles();
-            else if (item.getItemId() == 1) {
-                String[] choices = {"Block Wi-Fi", "Allow Wi-Fi", "Block mobile data", "Allow mobile data", "Block both", "Allow both"};
-                new AlertDialog.Builder(this).setTitle("Visible apps only").setItems(choices, (d, pos) -> bulk(pos < 2 ? 1 : pos < 4 ? 2 : 3, pos % 2 == 0)).show();
-            } else if (item.getItemId() == 2) {
-                blockedFirst = !blockedFirst; getPreferences(MODE_PRIVATE).edit().putBoolean("blocked_first", blockedFirst).apply(); filter();
-            } else if (item.getItemId() == 3) loadApps();
-            else if (item.getItemId() == 5 || item.getItemId() == 6) pickBackup(item.getItemId() == 5);
-            else if (item.getItemId() == 7) {
-                getPreferences(MODE_PRIVATE).edit().putBoolean("reduce_motion", !item.isChecked()).apply(); adapter.notifyDataSetChanged();
-            } else new AlertDialog.Builder(this).setTitle("Battery & local VPN")
-                .setMessage("No wake locks, periodic polling, traffic counters, or remote server. Allowed traffic uses Android's normal connection.\n\nWhen no apps are blocked on the current network, the VPN interface closes automatically; the firewall keeps monitoring saved rules. The VPN key returns when blocking is needed.\n\nON means blocked. Filters and sorting are saved. Tap an app to expand screen-on exceptions, roaming blocking, and per-app Lockdown. Screen-on means the device is interactive, including its lock screen. Roaming blocks override screen exceptions; Lockdown overrides all exceptions while the firewall runs. Hold an app for Android settings.\n\nWi-Fi/data rules follow the active connection. Network handovers are asynchronous. Do not enable Android's ‘Block connections without VPN’ for this firewall. A blocked app may still retry or wake itself; total battery use depends on those apps too.")
-                .setPositiveButton("Got it", null).show();
-            return true;
-        }); menu.show();
+        boolean reduced=getPreferences(MODE_PRIVATE).getBoolean("reduce_motion",false);
+        choices("Tools & settings",new String[]{"Profiles", "Bulk rules", (blockedFirst ? "✓  " : "")+"Blocked apps first",
+            "Refresh installed apps", "Export profile rules", "Import profile rules", (reduced ? "✓  " : "")+"Reduce motion", "Battery & help"},
+            new Runnable[]{this::showProfiles, () -> choices("Visible apps only",
+                new String[]{"Block Wi-Fi","Allow Wi-Fi","Block mobile data","Allow mobile data","Block both","Allow both"},
+                new Runnable[]{() -> bulk(1,true),() -> bulk(1,false),() -> bulk(2,true),() -> bulk(2,false),() -> bulk(3,true),() -> bulk(3,false)}),
+                () -> { blockedFirst=!blockedFirst; getPreferences(MODE_PRIVATE).edit().putBoolean("blocked_first",blockedFirst).apply(); filter(); },
+                this::loadApps,() -> pickBackup(true),() -> pickBackup(false),
+                () -> { getPreferences(MODE_PRIVATE).edit().putBoolean("reduce_motion",!reduced).apply(); adapter.notifyDataSetChanged(); },
+                () -> { LinearLayout body=sheetBody(); body.addView(text("No wake locks, periodic polling, traffic counters, or remote server. Allowed traffic uses Android's normal connection.\n\nWhen no apps are blocked on the current network, the VPN interface closes automatically; the firewall keeps monitoring saved rules. The VPN key returns when blocking is needed.\n\nON means blocked. Filters and sorting are saved. Tap an app to expand screen-on exceptions, roaming blocking, and per-app Lockdown. Screen-on means the device is interactive, including its lock screen. Roaming blocks override screen exceptions; Lockdown overrides all exceptions while the firewall runs. Hold an app for Android settings.\n\nWi-Fi/data rules follow the active connection. Network handovers are asynchronous. Do not enable Android's ‘Block connections without VPN’ for this firewall. A blocked app may still retry or wake itself; total battery use depends on those apps too.",14,MUTED)); sheet("Battery & local VPN",body); }});
     }
     private void showAppMenu(View anchor, App app) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        if (app.internet) { menu.getMenu().add(0, 1, 0, "Block both networks"); menu.getMenu().add(0, 2, 1, "Clear Wi-Fi & mobile base blocks"); menu.getMenu().add(0, 5, 4, "Reset all rules for this app"); }
-        menu.getMenu().add(0, 3, 2, "Android app settings");
-        menu.getMenu().add(0, 4, 3, "Copy package name");
-        menu.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 5) {
-                new AlertDialog.Builder(this).setTitle("Reset all rules?")
-                    .setMessage("Clear blocks, screen exceptions, roaming blocking, and Lockdown for " + app.label + " and any apps sharing its UID?")
-                    .setNegativeButton("Cancel", null).setPositiveButton("Reset", (d,w) -> {
-                        Map<String, Boolean> edits = new HashMap<>();
-                        for (String key : new String[]{"wifi", "mobile", "screen_wifi", "screen_mobile", "roaming", "lockdown"})
-                            edits.putAll(FirewallPlan.optionEdits(app.linked, key, false));
-                        Rules.apply(this, edits);
-                    }).show();
-            } else if (item.getItemId() == 4) {
-                ((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Package name", app.packageName));
-                Toast.makeText(this, "Package name copied", Toast.LENGTH_SHORT).show();
-            } else if (item.getItemId() == 3) appSettings(app);
-            else change(Collections.singleton(app.uid), 3, item.getItemId() == 1);
-            return true;
-        }); menu.show();
+        List<String> labels=new ArrayList<>(); List<Runnable> actions=new ArrayList<>();
+        if(app.internet) {
+            labels.add("Block both networks"); actions.add(() -> change(Collections.singleton(app.uid),3,true));
+            labels.add("Clear Wi-Fi & mobile base blocks"); actions.add(() -> change(Collections.singleton(app.uid),3,false));
+            labels.add("Reset all rules"); actions.add(() -> confirmAction("Reset all rules?",
+                "Clear blocks, screen exceptions, roaming blocking, and Lockdown for "+app.label+" and any apps sharing its UID?","Reset",() -> {
+                    Map<String,Boolean> edits=new HashMap<>();
+                    for(String key:new String[]{"wifi","mobile","screen_wifi","screen_mobile","roaming","lockdown"})
+                        edits.putAll(FirewallPlan.optionEdits(app.linked,key,false));
+                    Rules.apply(this,edits);
+                }));
+        }
+        labels.add("Android app settings"); actions.add(() -> appSettings(app));
+        labels.add("Copy package name"); actions.add(() -> {
+            ((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Package name",app.packageName));
+            Toast.makeText(this,"Package name copied",Toast.LENGTH_SHORT).show();
+        });
+        choices(app.label,labels.toArray(new String[0]),actions.toArray(new Runnable[0]));
+    }
+    private void confirmAction(String title,String message,String label,Runnable accepted) {
+        LinearLayout body=sheetBody(); body.addView(text(message,15,MUTED));
+        LinearLayout row=new LinearLayout(this); body.addView(row); Dialog[] dialog=new Dialog[1];
+        action(row,"Cancel",false,() -> dialog[0].dismiss());
+        action(row,label,true,() -> { dialog[0].dismiss(); accepted.run(); });
+        dialog[0]=sheet(title,body);
     }
     private void appSettings(App app) {
         try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.packageName))); }
@@ -379,6 +388,7 @@ public final class MainActivity extends Activity {
         private float startX, startY;
         private boolean dragging;
         ProfileCard() { super(MainActivity.this); setClickable(true); setOnClickListener(v -> showProfiles()); }
+        @Override public boolean performClick() { return super.performClick(); }
         @Override public boolean onInterceptTouchEvent(MotionEvent event) {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { startX = event.getX(); startY = event.getY(); dragging = false; }
             if (event.getActionMasked() == MotionEvent.ACTION_MOVE
@@ -436,15 +446,7 @@ public final class MainActivity extends Activity {
             }
         }
     }
-    private void chooseProfileColor() {
-        String id = Rules.activeProfile(this);
-        CharSequence[] labels = new CharSequence[ProfileColors.NAMES.length];
-        for (int i=0;i<labels.length;i++) labels[i] = coloredLabel(ProfileColors.NAMES[i],ProfileColors.COLORS[i]);
-        new AlertDialog.Builder(this).setTitle("Profile color")
-            .setSingleChoiceItems(labels,Rules.profileColorIndex(this,id),(dialog,which) -> {
-                Rules.setProfileColor(this,id,which); refreshProfile(); dialog.dismiss();
-            }).setNegativeButton("Cancel",null).show();
-    }
+    private void chooseProfileColor() { nameProfile(currentProfile, false); }
     private CharSequence coloredLabel(String name, int color) {
         SpannableString label = new SpannableString("●  " + name);
         label.setSpan(new ForegroundColorSpan(color),0,1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); return label;
@@ -457,58 +459,121 @@ public final class MainActivity extends Activity {
         }
         Collections.sort(entries, (a,b) -> a.getValue().compareToIgnoreCase(b.getValue())); return entries;
     }
+    // Custom sheets keep profile actions visible and avoid nested platform menus.
+    private Dialog sheet(String title, LinearLayout body) {
+        Dialog dialog = new Dialog(this); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20),dp(12),dp(20),dp(24)); bindSurface(content,28);
+        TextView handle = text("────",16,MUTED); handle.setGravity(Gravity.CENTER); content.addView(handle);
+        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView label = text(title,22,WHITE); label.setTypeface(null,Typeface.BOLD);
+        heading.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        Button close = new Button(this); close.setText("×"); styleButton(close,false); close.setTextSize(22);
+        close.setContentDescription("Close"); close.setPadding(0,0,0,0);
+        heading.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48))); close.setOnClickListener(v -> dialog.dismiss());
+        content.addView(heading);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(false); scroll.addView(body);
+        content.addView(scroll,new LinearLayout.LayoutParams(-1,-2));
+        dialog.setContentView(content); Window window = dialog.getWindow();
+        window.setBackgroundDrawableResource(android.R.color.transparent);
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setDimAmount(0.65f); window.setGravity(Gravity.BOTTOM);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        dialog.show(); window.setLayout(-1,-2);
+        content.post(() -> {
+            int max = (int)(getResources().getDisplayMetrics().heightPixels * 0.8f);
+            if (content.getHeight()>max) window.setLayout(-1,max);
+        });
+        return dialog;
+    }
+    private LinearLayout sheetBody() {
+        LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(0,dp(16),0,0); return body;
+    }
+    private Button action(LinearLayout row,String label,boolean primary,Runnable click) {
+        Button button = new Button(this); button.setText(label); styleButton(button,primary);
+        button.setMinWidth(0); button.setMinimumWidth(0); button.setPadding(dp(6),0,dp(6),0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,dp(48),1);
+        params.setMargins(dp(3),dp(6),dp(3),0); row.addView(button,params);
+        button.setOnClickListener(v -> click.run()); return button;
+    }
     private void showProfiles() {
-        List<Map.Entry<String, String>> entries = profileEntries(false);
-        CharSequence[] names = new CharSequence[entries.size()]; int checked = -1;
-        for (int i = 0; i < names.length; i++) { names[i] = coloredLabel(entries.get(i).getValue(), Rules.profileColor(this, entries.get(i).getKey())); if (entries.get(i).getKey().equals(currentProfile)) checked = i; }
-        new AlertDialog.Builder(this).setTitle("Switch profile")
-            .setSingleChoiceItems(names, checked, (dialog, which) -> {
-                Rules.switchProfile(this, entries.get(which).getKey());
-                refreshProfile(); ruleSnapshot = Rules.snapshot(this); filter(); dialog.dismiss();
-            }).setNegativeButton("Close", null).setNeutralButton("Manage", (d,w) -> manageProfiles())
-            .setPositiveButton("New", (d,w) -> nameProfile(null, false)).show();
+        LinearLayout body = sheetBody();
+        TextView hint = text("Tap a profile to activate its saved rules. Switch away from a profile before removing it.",13,MUTED);
+        body.addView(hint);
+        Dialog[] dialog = new Dialog[1];
+        for (Map.Entry<String,String> entry : profileEntries(false)) {
+            boolean active = entry.getKey().equals(currentProfile);
+            LinearLayout tile = new LinearLayout(this); tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setPadding(dp(10),dp(8),dp(10),dp(10));
+            int color = Rules.profileColor(this,entry.getKey());
+            tile.setBackground(surface(blend(SURFACE,color,0.08f),active ? color : BORDER,20));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1,-2); params.topMargin=dp(12); body.addView(tile,params);
+            Button select = new Button(this); select.setAllCaps(false); select.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+            select.setText(coloredLabel(entry.getValue() + (active ? "  ·  Active" : ""),color));
+            select.setSingleLine(true); select.setEllipsize(TextUtils.TruncateAt.END);
+            select.setTextColor(WHITE); select.setTextSize(17); select.setBackgroundColor(Color.TRANSPARENT);
+            tile.addView(select,new LinearLayout.LayoutParams(-1,dp(52)));
+            select.setOnClickListener(v -> { Rules.switchProfile(this,entry.getKey()); refreshProfile(); ruleSnapshot=Rules.snapshot(this); filter(); dialog[0].dismiss(); });
+            LinearLayout row = new LinearLayout(this); tile.addView(row);
+            action(row,"Edit",false,() -> { dialog[0].dismiss(); nameProfile(entry.getKey(),false); });
+            Button remove = action(row,"Remove",false,() -> { dialog[0].dismiss(); confirmDelete(entry.getKey(),entry.getValue()); });
+            remove.setEnabled(!active);
+        }
+        LinearLayout actions = new LinearLayout(this); body.addView(actions);
+        action(actions,"+ New profile",true,() -> { dialog[0].dismiss(); nameProfile(null,false); });
+        action(actions,"Duplicate",false,() -> { dialog[0].dismiss(); nameProfile(null,true); });
+        dialog[0] = sheet("Profiles",body);
     }
-    private void manageProfiles() {
-        new AlertDialog.Builder(this).setTitle("Manage profiles")
-            .setItems(new String[]{"New empty profile", "Duplicate current profile", "Rename current profile", "Change profile color", "Delete an inactive profile"}, (d, which) -> {
-                if (which == 0) nameProfile(null, false);
-                else if (which == 1) nameProfile(null, true);
-                else if (which == 2) nameProfile(currentProfile, false);
-                else if (which == 3) chooseProfileColor();
-                else deleteProfile();
-            }).setNegativeButton("Close", null).show();
-    }
+    private void manageProfiles() { showProfiles(); }
     private void nameProfile(String renameId, boolean duplicate) {
-        EditText input = new EditText(this); input.setSingleLine(true); input.setTextSize(16);
-        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
-        input.setHint("Profile name"); input.setText(renameId == null ? "" : Rules.profileName(this));
-        input.setSelectAllOnFocus(true);
-        LinearLayout container = new LinearLayout(this); container.setPadding(dp(20),dp(8),dp(20),0);
-        container.addView(input, new LinearLayout.LayoutParams(-1,dp(56)));
-        String title = renameId != null ? "Rename profile" : duplicate ? "Duplicate profile" : "New empty profile";
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(container)
-            .setMessage(renameId != null ? "Rules are saved automatically." : duplicate ? "Copy the current rules and switch to the new profile." : "Create and switch to a profile with no blocks.")
-            .setNegativeButton("Cancel", null).setPositiveButton(renameId != null ? "Save" : "Create", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        LinearLayout body = sheetBody();
+        TextView description = text(renameId != null ? "Edit the name and accent color. Rules save automatically." : duplicate ? "Copy the active profile’s rules into a new profile." : "Start with no blocks. The new profile becomes active.",13,MUTED);
+        body.addView(description);
+        EditText input = new EditText(this); input.setSingleLine(true); input.setTextSize(18); input.setTextColor(WHITE); input.setHintTextColor(MUTED);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)}); input.setHint("Profile name");
+        input.setText(renameId == null ? "" : Rules.profiles(this).get(renameId));
+        input.setPadding(dp(16),0,dp(16),0); bindSurface(input,16);
+        LinearLayout.LayoutParams field = new LinearLayout.LayoutParams(-1,dp(56)); field.topMargin=dp(20); field.bottomMargin=dp(20); body.addView(input,field);
+        body.addView(text("ACCENT COLOR",11,MUTED));
+        int[] selected = {renameId == null ? Rules.profiles(this).size()%ProfileColors.COLORS.length : Rules.profileColorIndex(this,renameId)};
+        Button[] swatches = new Button[ProfileColors.COLORS.length];
+        Runnable paint = () -> { for(int i=0;i<swatches.length;i++) if(swatches[i]!=null) {
+            swatches[i].setText((selected[0]==i ? "✓ " : "")+ProfileColors.NAMES[i]);
+            swatches[i].setSelected(selected[0]==i);
+            swatches[i].setBackground(surface(blend(SURFACE,ProfileColors.COLORS[i],selected[0]==i ? 0.22f : 0.04f),selected[0]==i ? ProfileColors.COLORS[i] : BORDER,16));
+        }};
+        for(int r=0;r<4;r++) {
+            LinearLayout row = new LinearLayout(this); body.addView(row);
+            for(int c=0;c<2;c++) {
+                final int index=r*2+c;
+                Button swatch=action(row,ProfileColors.NAMES[index],false,() -> { selected[0]=index; paint.run(); });
+                themedButtons.remove(swatch); swatch.setTextColor(ProfileColors.COLORS[index]); swatches[index]=swatch;
+            }
+        }
+        paint.run();
+        LinearLayout actions = new LinearLayout(this); body.addView(actions);
+        Dialog[] dialog = new Dialog[1];
+        action(actions,"Cancel",false,() -> dialog[0].dismiss());
+        action(actions,renameId == null ? "Create profile" : "Save changes",true,() -> {
             try {
-                if (renameId != null) Rules.renameProfile(this, renameId, input.getText().toString());
-                else Rules.createProfile(this, input.getText().toString(), duplicate);
-                refreshProfile(); ruleSnapshot = Rules.snapshot(this); filter(); dialog.dismiss();
-            } catch (IllegalArgumentException error) { input.setError(error.getMessage()); }
-        })); dialog.show();
+                String id=renameId;
+                if(id!=null) Rules.renameProfile(this,id,input.getText().toString());
+                else id=Rules.createProfile(this,input.getText().toString(),duplicate);
+                Rules.setProfileColor(this,id,selected[0]); refreshProfile(); ruleSnapshot=Rules.snapshot(this); filter(); dialog[0].dismiss();
+            } catch(IllegalArgumentException error) { input.setError(error.getMessage()); }
+        });
+        dialog[0]=sheet(renameId != null ? "Edit profile" : duplicate ? "Duplicate profile" : "New profile",body);
     }
-    private void deleteProfile() {
-        List<Map.Entry<String, String>> entries = profileEntries(true);
-        if (entries.isEmpty()) { Toast.makeText(this, "Switch to another profile before deleting this one", Toast.LENGTH_LONG).show(); return; }
-        String[] names = new String[entries.size()]; for (int i=0; i<names.length; i++) names[i] = entries.get(i).getValue();
-        new AlertDialog.Builder(this).setTitle("Delete an inactive profile").setItems(names, (d,which) -> {
-            Map.Entry<String, String> entry = entries.get(which);
-            new AlertDialog.Builder(this).setTitle("Delete ‘" + entry.getValue() + "’?")
-                .setMessage("This permanently deletes its saved rules. The active profile is unaffected.")
-                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (confirm,w) -> {
-                    Rules.deleteProfile(this, entry.getKey()); refreshProfile();
-                }).show();
-        }).setNegativeButton("Cancel", null).show();
+    private void confirmDelete(String id,String name) {
+        LinearLayout body=sheetBody(); body.addView(text("Remove ‘"+name+"’ and its saved rules? This cannot be undone.",15,MUTED));
+        LinearLayout actions=new LinearLayout(this); body.addView(actions); Dialog[] dialog=new Dialog[1];
+        action(actions,"Keep profile",false,() -> dialog[0].dismiss());
+        action(actions,"Remove",true,() -> {
+            try { Rules.deleteProfile(this,id); refreshProfile(); dialog[0].dismiss(); showProfiles(); }
+            catch(IllegalArgumentException error) { Toast.makeText(this,error.getMessage(),Toast.LENGTH_LONG).show(); }
+        });
+        dialog[0]=sheet("Remove profile",body);
     }
     private boolean motionEnabled() {
         return !getPreferences(MODE_PRIVATE).getBoolean("reduce_motion", false)
@@ -541,7 +606,7 @@ public final class MainActivity extends Activity {
         if (artwork == null) return;
         GradientDrawable cover = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{blend(ACCENT,WHITE,0.15f),blend(ACCENT,0xff25314f,0.3f)});
-        cover.setCornerRadius(dp(10)); artwork.setBackground(cover); artwork.setTextColor(BG);
+        cover.setCornerRadius(dp(16)); artwork.setBackground(cover); artwork.setTextColor(BG);
     }
     private void applyPalette() {
         if (screen == null) return;
@@ -554,6 +619,12 @@ public final class MainActivity extends Activity {
         if (list != null) { list.setDivider(new android.graphics.drawable.ColorDrawable(BG)); list.setDividerHeight(dp(6)); }
         if (status != null && power != null) updateStatus();
         paintArtwork();
+        if (profileSection != null) {
+            GradientDrawable panel = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{blend(SURFACE,ACCENT,0.14f),SURFACE});
+            panel.setCornerRadius(dp(24)); panel.setStroke(dp(1),blend(BORDER,ACCENT,0.25f));
+            profileSection.setBackground(panel);
+        }
     }
     private void paintControl(CompoundButton control) {
         int[][] states = {new int[]{-android.R.attr.state_enabled},new int[]{android.R.attr.state_checked},new int[]{}};
@@ -571,7 +642,7 @@ public final class MainActivity extends Activity {
         button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},
             new int[]{MUTED, primary ? BG : ACCENT}));
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(alpha(ACCENT,50)),
-            surface(primary ? ACCENT : BG, primary ? ACCENT : BORDER, 10), null));
+            surface(primary ? ACCENT : BG, primary ? ACCENT : BORDER, 16), null));
     }
     private void pickBackup(boolean export) {
         Intent intent = new Intent(export ? Intent.ACTION_CREATE_DOCUMENT : Intent.ACTION_OPEN_DOCUMENT);
